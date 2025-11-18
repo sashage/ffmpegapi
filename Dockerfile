@@ -9,6 +9,9 @@ RUN apt-get update && \
     gfortran \
     libsndfile1 \
     libsndfile1-dev \
+    libopenblas-dev \
+    liblapack-dev \
+    pkg-config \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
