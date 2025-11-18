@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     upload_dir: str = os.path.join(APP_ROOT, "uploads")
     output_dir: str = os.path.join(APP_ROOT, "outputs")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Log paths at startup for debugging
+        import sys
+        print(f"=== FFmpeg API Paths ===", file=sys.stderr)
+        print(f"APP_ROOT: {APP_ROOT}", file=sys.stderr)
+        print(f"upload_dir: {self.upload_dir}", file=sys.stderr)
+        print(f"output_dir: {self.output_dir}", file=sys.stderr)
+        print(f"CWD: {os.getcwd()}", file=sys.stderr)
+        print(f"========================", file=sys.stderr)
+
     input_tag_placeholder: str = "<input>"
     max_input_files: int = 5
 
