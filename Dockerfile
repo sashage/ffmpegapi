@@ -1,28 +1,33 @@
 FROM python:3.11-slim
 
-# Install system dependencies for ffmpeg and audio processing libraries
+# Install system dependencies (runtime libs only, no build tools)
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     ffmpeg \
-    gcc \
-    g++ \
-    gfortran \
     libsndfile1 \
-    libsndfile1-dev \
-    libopenblas-dev \
-    liblapack-dev \
-    pkg-config \
+    ca-certificates \
+    curl \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast, reliable package management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set environment variables to prefer wheels and fail fast if unavailable
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy dependency files
+COPY pyproject.toml ./
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies using uv (much faster than pip, better wheel selection)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r pyproject.toml
 
 # Copy application code
 COPY . .
