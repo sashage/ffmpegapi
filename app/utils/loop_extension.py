@@ -5,6 +5,7 @@ Analyzes an audio file to find the optimal loop point between the first 25% and 
 then creates a seamlessly merged version with extended playtime.
 """
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import Tuple
@@ -12,6 +13,10 @@ from typing import Tuple
 import librosa
 import numpy as np
 from scipy import signal
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 def load_audio_segment(
@@ -31,10 +36,13 @@ def load_audio_segment(
     y, sr = librosa.load(str(file_path), sr=None, mono=True)
 
     total_samples = len(y)
+    duration = total_samples / sr
     start_sample = int(total_samples * start_percent / 100)
     end_sample = int(total_samples * end_percent / 100)
 
     segment = y[start_sample:end_sample]
+
+    logger.info(f"Loaded segment {start_percent}%-{end_percent}%: duration={duration:.2f}s, sr={sr}, samples={len(segment)}")
 
     return segment, sr, total_samples
 
@@ -59,6 +67,8 @@ def find_best_loop_point(
     window_duration = min(5.0, len(first_segment) / sr, len(last_segment) / sr)
     window_samples = int(window_duration * sr)
 
+    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples)")
+
     search_segment = first_segment[:window_samples]
 
     # Normalize for better correlation
@@ -78,6 +88,9 @@ def find_best_loop_point(
 
     # Convert to microseconds
     offset_microseconds = int((best_offset / sr) * 1_000_000)
+    offset_seconds = offset_microseconds / 1_000_000
+
+    logger.info(f"Best loop point found: offset={offset_seconds:.3f}s, correlation_score={correlation_score:.4f}")
 
     return best_offset, offset_microseconds, correlation_score
 
@@ -180,21 +193,31 @@ def extend_audio_loop(
     input_path = Path(input_path)
     output_path = Path(output_path)
 
+    logger.info(f"=== Starting loop extension analysis ===")
+    logger.info(f"Input: {input_path.name}")
+    logger.info(f"Threshold: {threshold}, Crossfade: {crossfade_duration}s")
+
     try:
         # Get original duration
         original_duration = get_audio_duration(input_path)
+        logger.info(f"Original audio duration: {original_duration:.2f}s")
 
         # Load first 25% and last 25%
+        logger.info("Loading audio segments for analysis...")
         first_segment, sr, total_samples = load_audio_segment(input_path, 0, 25)
         last_segment, _, _ = load_audio_segment(input_path, 75, 100)
 
         # Find the best loop point
+        logger.info("Analyzing cross-correlation...")
         offset_samples, offset_microseconds, correlation_score = find_best_loop_point(
             first_segment, last_segment, sr
         )
 
         # Check if correlation score is below threshold
         if correlation_score < threshold:
+            logger.warning(f"❌ Correlation score {correlation_score:.4f} < threshold {threshold}")
+            logger.info("Returning original file unchanged")
+
             # Copy original file to output without modification
             subprocess.run(["cp", str(input_path), str(output_path)], check=True)
 
@@ -208,12 +231,16 @@ def extend_audio_loop(
                 "error": "",
             }
 
+        logger.info(f"✓ Correlation score {correlation_score:.4f} >= threshold {threshold}")
+        logger.info(f"Extending audio with {crossfade_duration}s crossfade...")
+
         # Merge the audio with crossfade
         success, error_msg = merge_with_crossfade(
             input_path, offset_microseconds, output_path, crossfade_duration
         )
 
         if not success:
+            logger.error(f"Failed to merge audio: {error_msg}")
             return {
                 "success": False,
                 "extended": False,
@@ -228,6 +255,9 @@ def extend_audio_loop(
         new_duration = get_audio_duration(output_path)
         extension = new_duration - original_duration
 
+        logger.info(f"✓ Successfully extended: {original_duration:.2f}s → {new_duration:.2f}s (+{extension:.2f}s, +{extension/original_duration*100:.1f}%)")
+        logger.info("=== Loop extension complete ===")
+
         return {
             "success": True,
             "extended": True,
@@ -239,6 +269,7 @@ def extend_audio_loop(
         }
 
     except Exception as e:
+        logger.error(f"Exception during loop extension: {str(e)}", exc_info=True)
         return {
             "success": False,
             "extended": False,

@@ -10,6 +10,7 @@ Description: FFmpeg command execution via FastAPI endpoint.
 __author__ = "Maria Kevin"
 __version__ = "0.1.0"
 
+import logging
 import os
 import shlex
 import subprocess
@@ -34,6 +35,10 @@ from app.utils.loop_extension import extend_audio_loop
 from app.task import periodic_cleanup
 import asyncio
 from app.config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 @asynccontextmanager
@@ -140,8 +145,11 @@ async def extend_loop_endpoint(
 
     Returns the extended file if correlation score >= threshold, otherwise returns original.
     """
+    logger.info(f"📥 /extendloop request: file={input_file.filename}, size={input_file.size}, threshold={threshold}, crossfade={crossfade}s")
+
     # Validate file size
     if not input_file_size_within_limit(input_file.size):
+        logger.warning(f"File size {input_file.size} exceeds limit")
         raise HTTPException(
             status_code=400,
             detail=f"File size exceeds {settings.max_upload_size_mb / (1024 * 1024):.0f}MB"
@@ -150,12 +158,14 @@ async def extend_loop_endpoint(
     # Create temp folders
     upload_temp_folder = create_temp_folder(settings.upload_dir)
     output_temp_folder = create_temp_folder(settings.output_dir)
+    logger.info(f"Created temp folders: upload={upload_temp_folder}, output={output_temp_folder}")
 
     # Save uploaded file
     input_filename = input_file.filename or "input.mp3"
     input_path = os.path.join(upload_temp_folder, input_filename)
     file_bytes = await input_file.read()
     save_uploaded_file(file_bytes, input_path)
+    logger.info(f"Saved uploaded file to {input_path}")
 
     # Determine output filename
     file_stem, file_ext = os.path.splitext(input_filename)
@@ -172,10 +182,12 @@ async def extend_loop_endpoint(
 
     # Check if operation failed
     if not result["success"]:
+        logger.error(f"Loop extension failed: {result['error']}")
         raise HTTPException(status_code=500, detail=f"Failed: {result['error']}")
 
     # Check output exists
     if not os.path.exists(output_path):
+        logger.error(f"Output file not created at {output_path}")
         raise HTTPException(status_code=500, detail="Output file not created")
 
     # Return file directly with metadata headers
@@ -188,4 +200,7 @@ async def extend_loop_endpoint(
     response.headers["X-Correlation-Score"] = f"{result['correlation_score']:.4f}"
     response.headers["X-Original-Duration"] = f"{result['original_duration']:.2f}"
     response.headers["X-New-Duration"] = f"{result['new_duration']:.2f}"
+
+    logger.info(f"📤 Returning file: extended={result['extended']}, correlation={result['correlation_score']:.4f}, duration={result['original_duration']:.2f}s → {result['new_duration']:.2f}s")
+
     return response
