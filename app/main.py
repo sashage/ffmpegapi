@@ -10,6 +10,7 @@ Description: FFmpeg command execution via FastAPI endpoint.
 __author__ = "Maria Kevin"
 __version__ = "0.1.0"
 
+import os
 import shlex
 import subprocess
 from contextlib import asynccontextmanager
@@ -87,12 +88,15 @@ async def ffmpeg_run(
     # Get the actual output file path from the processed command
     output_file_path = shlex.split(processed_cmd)[-1].strip("'\"")
 
+    # Convert to absolute path for FileResponse
+    absolute_output_path = os.path.abspath(output_file_path)
+
     if return_file:
         # Return the file directly
         return FileResponse(
-            path=output_file_path,
+            path=absolute_output_path,
             media_type="application/octet-stream",
-            filename=output_file_path.split("/")[-1]
+            filename=os.path.basename(absolute_output_path)
         )
 
     # Return JSON response with URL for later download
