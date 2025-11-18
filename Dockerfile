@@ -1,9 +1,15 @@
 FROM python:3.11-slim
 
-# install ffmpeg
+# Install system dependencies for ffmpeg and audio processing libraries
 RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    apt-get clean && \
+    apt-get install -y \
+    ffmpeg \
+    gcc \
+    g++ \
+    gfortran \
+    libsndfile1 \
+    libsndfile1-dev \
+    && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Set working directory
