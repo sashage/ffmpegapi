@@ -117,15 +117,26 @@ def get_output_path_from_cmd(cmd: str, replace_parent_dir: bool = False) -> str:
     # Last token is assumed to be output path
     output_path = tokens[-1].strip()
 
-    # Normalize quotes (in case shlex didn’t fully handle it)
+    # Normalize quotes (in case shlex didn't fully handle it)
     output_path = output_path.strip("'").strip('"')
 
     if replace_parent_dir:
-        # Normalize path separators, remove first directory level if present
+        # Extract path relative to the output directory
         output_path = os.path.normpath(output_path)
-        parts = output_path.split(os.sep, 1)
-        if len(parts) == 2:
-            output_path = parts[1]
+
+        # Find the output_dir in the path and get everything after it
+        output_dir = os.path.normpath(settings.output_dir)
+        if output_dir in output_path:
+            # Split on the output_dir and take the part after it
+            parts = output_path.split(output_dir, 1)
+            if len(parts) == 2:
+                # Remove leading separator
+                output_path = parts[1].lstrip(os.sep)
+        else:
+            # Fallback: remove first directory level if present
+            parts = output_path.split(os.sep, 1)
+            if len(parts) == 2:
+                output_path = parts[1]
 
     return output_path
 
