@@ -3,5 +3,7 @@ services:
     build: .
     ports:
       - "${PORT:-3088}:${PORT:-3088}"
-    volumes:
-      - .:/app
+    # Note: Volume mount removed for production deployments
+    # For local development with hot-reload, uncomment:
+    # volumes:
+    #   - .:/app
