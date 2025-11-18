@@ -13,8 +13,7 @@ __version__ = "0.1.0"
 
 import os
 import shlex
-from typing_extensions import Annotated
-from fastapi import File, UploadFile, Form
+from fastapi import UploadFile
 from app.config import settings
 from app.exceptions import InvalidFFmpegCommandException
 from app.utils.file_operations import save_uploaded_file
@@ -23,12 +22,12 @@ from app.utils.validation import input_file_size_within_limit
 
 
 def preprocess_cmd(
-    cmd: str = Form(...),
-    input_file: UploadFile | None = File(None),
-    input_file_2: UploadFile | None = File(None),
-    input_file_3: UploadFile | None = File(None),
-    input_file_4: UploadFile | None = File(None),
-    input_file_5: UploadFile | None = File(None),
+    cmd: str,
+    input_file: UploadFile | None = None,
+    input_file_2: UploadFile | None = None,
+    input_file_3: UploadFile | None = None,
+    input_file_4: UploadFile | None = None,
+    input_file_5: UploadFile | None = None,
 ) -> str:
     """Saves uploaded input files and replaces input tags in the command.
 

@@ -13,10 +13,9 @@ __version__ = "0.1.0"
 import shlex
 import subprocess
 from contextlib import asynccontextmanager
-from typing import Dict, Tuple, Union
-from typing_extensions import Annotated
+from typing import Union
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, UploadFile, File
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -56,34 +55,46 @@ async def read_root():
 @app.post("/run", response_model=CommandResult)
 async def ffmpeg_run(
     request: Request,
-    _: Annotated[bool, Depends(allow_command)],
-    cmd: Annotated[str, Depends(preprocess_cmd)],
+    cmd: str = Form(...),
+    input_file: UploadFile | None = File(None),
+    input_file_2: UploadFile | None = File(None),
+    input_file_3: UploadFile | None = File(None),
+    input_file_4: UploadFile | None = File(None),
+    input_file_5: UploadFile | None = File(None),
     return_file: bool = Form(
         False, description="If true, returns the output file itself."
     ),
-) -> Union[CommandResult, Tuple[Dict[str, str], int], RedirectResponse]:
+) -> Union[CommandResult, RedirectResponse]:
     """Executes the provided FFmpeg command after validation and preprocessing."""
-    try:
-        # Tokenize and execute
-        result = subprocess.run(
-            shlex.split(cmd), capture_output=True, text=True, timeout=30
-        )
+    # Validate command (raises HTTPException on failure)
+    allow_command(cmd)
 
-        output_url = request.url_for(
-            "static", path=get_output_path_from_cmd(cmd, replace_parent_dir=True)
-        )
+    # Preprocess command with uploaded files (raises HTTPException on failure)
+    processed_cmd = preprocess_cmd(
+        cmd=cmd,
+        input_file=input_file,
+        input_file_2=input_file_2,
+        input_file_3=input_file_3,
+        input_file_4=input_file_4,
+        input_file_5=input_file_5,
+    )
 
-        if return_file:
-            return RedirectResponse(output_url, status_code=302)
+    # Tokenize and execute
+    result = subprocess.run(
+        shlex.split(processed_cmd), capture_output=True, text=True, timeout=30
+    )
 
-        return CommandResult(
-            cmd=cmd,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            returncode=result.returncode,
-            output_url=str(output_url),
-        )
-    except subprocess.TimeoutExpired:
-        return {"error": "Command timed out"}, 408
-    except Exception as e:
-        return {"error": str(e)}, 500
+    output_url = request.url_for(
+        "static", path=get_output_path_from_cmd(processed_cmd, replace_parent_dir=True)
+    )
+
+    if return_file:
+        return RedirectResponse(output_url, status_code=302)
+
+    return CommandResult(
+        cmd=processed_cmd,
+        stdout=result.stdout,
+        stderr=result.stderr,
+        returncode=result.returncode,
+        output_url=str(output_url),
+    )
