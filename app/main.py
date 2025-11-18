@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Union
 
 from fastapi import FastAPI, Form, Request, UploadFile, File
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.models import CommandResult
@@ -64,7 +64,7 @@ async def ffmpeg_run(
     return_file: bool = Form(
         False, description="If true, returns the output file itself."
     ),
-) -> Union[CommandResult, RedirectResponse]:
+) -> Union[CommandResult, FileResponse]:
     """Executes the provided FFmpeg command after validation and preprocessing."""
     # Validate command (raises HTTPException on failure)
     allow_command(cmd)
@@ -84,12 +84,21 @@ async def ffmpeg_run(
         shlex.split(processed_cmd), capture_output=True, text=True, timeout=30
     )
 
+    # Get the actual output file path from the processed command
+    output_file_path = shlex.split(processed_cmd)[-1].strip("'\"")
+
+    if return_file:
+        # Return the file directly
+        return FileResponse(
+            path=output_file_path,
+            media_type="application/octet-stream",
+            filename=output_file_path.split("/")[-1]
+        )
+
+    # Return JSON response with URL for later download
     output_url = request.url_for(
         "static", path=get_output_path_from_cmd(processed_cmd, replace_parent_dir=True)
     )
-
-    if return_file:
-        return RedirectResponse(output_url, status_code=302)
 
     return CommandResult(
         cmd=processed_cmd,
