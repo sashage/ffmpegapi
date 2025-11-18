@@ -81,6 +81,8 @@ async def ffmpeg_run(
     )
 
     # Tokenize and execute
+    import sys
+    print(f"DEBUG: FFmpeg command: {processed_cmd}", file=sys.stderr)
     result = subprocess.run(
         shlex.split(processed_cmd), capture_output=True, text=True, timeout=30
     )
