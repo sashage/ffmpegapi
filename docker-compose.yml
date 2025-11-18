@@ -2,6 +2,6 @@ services:
   app:
     build: .
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "${PORT:-3088}:${PORT:-3088}"
     volumes:
       - .:/app
