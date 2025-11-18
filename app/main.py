@@ -16,7 +16,7 @@ import subprocess
 from contextlib import asynccontextmanager
 from typing import Union
 
-from fastapi import FastAPI, Form, Request, UploadFile, File
+from fastapi import FastAPI, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -85,18 +85,29 @@ async def ffmpeg_run(
         shlex.split(processed_cmd), capture_output=True, text=True, timeout=30
     )
 
-    # Get the actual output file path from the processed command
+    # Get the actual output file path from the processed command (already absolute)
     output_file_path = shlex.split(processed_cmd)[-1].strip("'\"")
 
-    # Convert to absolute path for FileResponse
-    absolute_output_path = os.path.abspath(output_file_path)
+    # Check if FFmpeg succeeded
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"FFmpeg failed: {result.stderr}"
+        )
+
+    # Check if output file was created
+    if not os.path.exists(output_file_path):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Output file not created at {output_file_path}. FFmpeg stderr: {result.stderr}"
+        )
 
     if return_file:
         # Return the file directly
         return FileResponse(
-            path=absolute_output_path,
+            path=output_file_path,
             media_type="application/octet-stream",
-            filename=os.path.basename(absolute_output_path)
+            filename=os.path.basename(output_file_path)
         )
 
     # Return JSON response with URL for later download

@@ -95,10 +95,12 @@ def test_run_endpoint_missing_input_tag(mock_subprocess_run):
 
 @patch("subprocess.run")
 @patch("app.utils.file_operations.save_uploaded_file")
-def test_run_endpoint_success(mock_save_uploaded_file, mock_subprocess_run):
+@patch("os.path.exists")
+def test_run_endpoint_success(mock_exists, mock_save_uploaded_file, mock_subprocess_run):
     mock_subprocess_run.return_value = MagicMock(
         stdout="Success", stderr="", returncode=0
     )
+    mock_exists.return_value = True  # Mock that output file exists
 
     small_file_content = b"a" * (1 * 1024 * 1024)  # 1MB
     files = {"input_file": ("small_video.mp4", small_file_content, "video/mp4")}
@@ -116,11 +118,13 @@ def test_run_endpoint_success(mock_save_uploaded_file, mock_subprocess_run):
 
 @patch("subprocess.run")
 @patch("app.utils.file_operations.save_uploaded_file")
-def test_run_endpoint_multiple_input_tags(mock_save_uploaded_file, mock_subprocess_run):
+@patch("os.path.exists")
+def test_run_endpoint_multiple_input_tags(mock_exists, mock_save_uploaded_file, mock_subprocess_run):
     """Test that multiple input files are supported"""
     mock_subprocess_run.return_value = MagicMock(
         stdout="Success", stderr="", returncode=0
     )
+    mock_exists.return_value = True  # Mock that output file exists
 
     small_file_content = b"a" * (1 * 1024 * 1024)  # 1MB
     files = {
