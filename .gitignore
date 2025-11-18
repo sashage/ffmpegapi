@@ -5,7 +5,8 @@ build/
 dist/
 wheels/
 *.egg-info
-
+CLAUDE.md
+.claude
 # Virtual environments
 .venv
 outputs/

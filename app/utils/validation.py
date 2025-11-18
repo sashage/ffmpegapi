@@ -55,8 +55,14 @@ def contains_prohibited_operations(cmd: str) -> bool:
 
 
 def check_if_input_tag_exists(cmd: str) -> bool:
-    """Check if the command contains an input tag."""
-    return f"-i {settings.input_tag_placeholder}" in cmd
+    """Check if the command contains at least one input tag."""
+    # Check for <input> or <input_2> through <input_5>
+    if f"-i {settings.input_tag_placeholder}" in cmd:
+        return True
+    for i in range(2, settings.max_input_files + 1):
+        if f"-i <input_{i}>" in cmd:
+            return True
+    return False
 
 
 def input_file_size_within_limit(file_size: int | None) -> bool:

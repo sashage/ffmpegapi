@@ -23,35 +23,74 @@ from app.utils.validation import input_file_size_within_limit
 
 
 def preprocess_cmd(
-    input_file: Annotated[UploadFile, File()],
     cmd: str = Form(...),
+    input_file: UploadFile | None = File(None),
+    input_file_2: UploadFile | None = File(None),
+    input_file_3: UploadFile | None = File(None),
+    input_file_4: UploadFile | None = File(None),
+    input_file_5: UploadFile | None = File(None),
 ) -> str:
-    """Saves the uploaded input file and replaces the input tag in the command.
+    """Saves uploaded input files and replaces input tags in the command.
+
+    Supports up to 5 input files:
+    - input_file -> <input>
+    - input_file_2 -> <input_2>
+    - input_file_3 -> <input_3>
+    - input_file_4 -> <input_4>
+    - input_file_5 -> <input_5>
 
     Example:
-    If cmd is "ffmpeg -i input.mp4 -c:v libx264 output.mp4" and the uploaded file
-    is "input.mp4", this function saves the file to the upload directory and replaces
-    "input.mp4" with the full path to the saved file.
-
+    cmd = "ffmpeg -i <input> -i <input_2> -filter_complex hstack output.mp4"
+    Files: input_file=video1.mp4, input_file_2=video2.mp4
+    Result: Saves both files and replaces placeholders with their paths.
     """
 
-    # check if multple -i tags exist, if yes raise exception
-    if cmd.count(r"-i") != 1:
+    # Collect uploaded files with their corresponding placeholder keys
+    files_map = {
+        "input": input_file,
+        "input_2": input_file_2,
+        "input_3": input_file_3,
+        "input_4": input_file_4,
+        "input_5": input_file_5,
+    }
+
+    # Filter out None values to get actually uploaded files
+    uploaded_files = {key: file for key, file in files_map.items() if file is not None}
+
+    # Validate at least one file is provided
+    if not uploaded_files:
         raise InvalidFFmpegCommandException(
-            detail="Command must contain exactly one input tag '-i'."
+            detail="At least one input file must be provided."
         )
 
-    if not input_file_size_within_limit(input_file.size):
-        raise InvalidFFmpegCommandException(
-            status_code=413,
-            detail=f"Input file size exceeds the maximum allowed limit of {settings.max_upload_size_mb} bytes.",
-        )
+    # Create a single temp folder for all input files in this request
+    temp_folder = create_temp_folder(settings.upload_dir)
 
-    full_path = f"{create_temp_folder(settings.upload_dir)}/{input_file.filename}"
+    # Process each uploaded file
+    new_cmd = cmd
+    for placeholder_key, file in uploaded_files.items():
+        # Validate file size
+        if not input_file_size_within_limit(file.size):
+            raise InvalidFFmpegCommandException(
+                status_code=413,
+                detail=f"File '{file.filename}' size exceeds the maximum allowed limit of {settings.max_upload_size_mb} bytes.",
+            )
 
-    save_uploaded_file(input_file.file.read(), full_path)
+        # Construct placeholder and check if it exists in command
+        placeholder = f"<{placeholder_key}>"
+        if placeholder not in cmd:
+            raise InvalidFFmpegCommandException(
+                detail=f"Uploaded file for '{placeholder}' but placeholder not found in command."
+            )
 
-    new_cmd = replace_input_tag(cmd, full_path)
+        # Save file to temp folder
+        full_path = f"{temp_folder}/{file.filename}"
+        save_uploaded_file(file.file.read(), full_path)
+
+        # Replace placeholder with actual file path
+        new_cmd = new_cmd.replace(placeholder, f"'{full_path}'", 1)
+
+    # Replace output tag
     new_cmd = replace_output_tag(new_cmd)
     return new_cmd
 

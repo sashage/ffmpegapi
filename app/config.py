@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     output_dir: str = "outputs"
 
     input_tag_placeholder: str = "<input>"
+    max_input_files: int = 5
 
     allowed_commands: list[str] = ["ffmpeg", "ffprobe"]
     max_upload_size_mb: int = 100 * 1024 * 1024  # 100 MB

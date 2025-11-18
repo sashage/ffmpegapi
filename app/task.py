@@ -42,9 +42,14 @@ def cleanup_old_folders(path) -> None:
         # Delete if older than timeout minutes
         if (now - modified).total_seconds() / 60 > timeout:
             try:
+                # Count files before deletion for logging
+                file_count = sum(len(files) for _, _, files in os.walk(folder_path))
+
+                # Delete folder and all its contents recursively
                 shutil.rmtree(folder_path)
+
                 logger.info(
-                    f"Deleted {subdir} - {int((now - modified).total_seconds() / 60)} minutes old"
+                    f"Deleted {subdir} ({file_count} file(s)) - {int((now - modified).total_seconds() / 60)} minutes old"
                 )
             except OSError as e:
                 logger.error(f"Error deleting {subdir}: {e}")

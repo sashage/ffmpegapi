@@ -25,8 +25,8 @@ def test_run_endpoint_no_file(mock_subprocess_run):
         "/run",
         data={"cmd": "ffmpeg -i <input> -c:v libx264 output.mp4"},
     )
-    assert response.status_code == 422
-    assert "detail" in response.json()
+    assert response.status_code == 400
+    assert response.json() == {"detail": "At least one input file must be provided."}
 
 
 # test with more than 10MB file
@@ -41,7 +41,7 @@ def test_run_endpoint_large_file(mock_subprocess_run):
     )
     assert response.status_code == 413
     assert response.json() == {
-        "detail": f"Input file size exceeds the maximum allowed limit of {100 * 1024 * 1024} bytes."
+        "detail": f"File 'large_video.mp4' size exceeds the maximum allowed limit of {100 * 1024 * 1024} bytes."
     }
 
 
@@ -117,17 +117,23 @@ def test_run_endpoint_success(mock_save_uploaded_file, mock_subprocess_run):
 @patch("subprocess.run")
 @patch("app.utils.file_operations.save_uploaded_file")
 def test_run_endpoint_multiple_input_tags(mock_save_uploaded_file, mock_subprocess_run):
+    """Test that multiple input files are supported"""
+    mock_subprocess_run.return_value = MagicMock(
+        stdout="Success", stderr="", returncode=0
+    )
+
     small_file_content = b"a" * (1 * 1024 * 1024)  # 1MB
-    files = {"input_file": ("small_video.mp4", small_file_content, "video/mp4")}
+    files = {
+        "input_file": ("video1.mp4", small_file_content, "video/mp4"),
+        "input_file_2": ("video2.mp4", small_file_content, "video/mp4"),
+    }
     response = client.post(
         "/run",
-        data={"cmd": "ffmpeg -i <input> -i <input> -c:v libx264 output.mp4"},
+        data={"cmd": "ffmpeg -i <input> -i <input_2> -filter_complex hstack output.mp4"},
         files=files,
     )
-    assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Command must contain exactly one input tag '-i'."
-    }
+    assert response.status_code == 200
+    assert "output_url" in response.json()
 
 
 @patch("subprocess.run")

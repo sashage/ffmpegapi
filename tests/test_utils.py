@@ -15,6 +15,7 @@ from app.utils.command_processing import preprocess_cmd
 from fastapi import UploadFile
 from unittest.mock import MagicMock, patch
 import pytest
+import os
 
 
 @patch(
@@ -31,14 +32,19 @@ def test_preprocess_cmd(mock_create_temp_folder):
     )
 
     cmd = "ffmpeg -i <input> -c:v libx264 output.mp4"
-    processed_cmd = preprocess_cmd(input_file=mock_file, cmd=cmd)
+    processed_cmd = preprocess_cmd(
+        cmd=cmd,
+        input_file=mock_file,
+        input_file_2=None,
+        input_file_3=None,
+        input_file_4=None,
+        input_file_5=None,
+    )
     assert "/tmp/all the stars.mp3" in processed_cmd
     assert (
         "ffmpeg -i '/tmp/all the stars.mp3' -c:v libx264 '/tmp/output.mp4'"
         == processed_cmd
     )
-
-    # test
 
 
 @patch(
@@ -133,3 +139,44 @@ def test_input_file_size_within_limit():
     assert not input_file_size_within_limit(
         settings.max_upload_size_mb + 1
     )  # exceed limit
+
+
+def test_cleanup_deletes_all_files():
+    """Test that cleanup_old_folders deletes all files in old folders"""
+    import tempfile
+    import time
+    from app.task import cleanup_old_folders
+
+    # Create a temporary directory for testing
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create an old folder with multiple files
+        old_folder = os.path.join(temp_dir, "old_uuid_folder")
+        os.makedirs(old_folder)
+
+        # Create multiple files in the folder
+        file1 = os.path.join(old_folder, "file1.mp4")
+        file2 = os.path.join(old_folder, "file2.mp4")
+        file3 = os.path.join(old_folder, "file3.mp4")
+
+        for file in [file1, file2, file3]:
+            with open(file, "w") as f:
+                f.write("test content")
+
+        # Verify files exist
+        assert os.path.exists(file1)
+        assert os.path.exists(file2)
+        assert os.path.exists(file3)
+        assert len(os.listdir(old_folder)) == 3
+
+        # Set folder modification time to 11 minutes ago
+        old_time = time.time() - (11 * 60)
+        os.utime(old_folder, (old_time, old_time))
+
+        # Run cleanup
+        cleanup_old_folders(temp_dir)
+
+        # Verify folder and all files are deleted
+        assert not os.path.exists(old_folder)
+        assert not os.path.exists(file1)
+        assert not os.path.exists(file2)
+        assert not os.path.exists(file3)
