@@ -20,14 +20,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 
 def load_audio_segment(
-    file_path: Path | str, start_percent: float = 0, end_percent: float = 100
+    file_path: Path | str, start_seconds: float = 0, end_seconds: float | None = None
 ) -> Tuple[np.ndarray, int, int]:
-    """Load a segment of an audio file.
+    """Load a segment of an audio file by time range.
 
     Args:
         file_path: Path to audio file
-        start_percent: Start position as percentage (0-100)
-        end_percent: End position as percentage (0-100)
+        start_seconds: Start position in seconds from beginning
+        end_seconds: End position in seconds from beginning (None = end of file)
 
     Returns:
         Tuple of (audio_segment, sample_rate, total_samples)
@@ -36,13 +36,19 @@ def load_audio_segment(
     y, sr = librosa.load(str(file_path), sr=None, mono=True)
 
     total_samples = len(y)
-    duration = total_samples / sr
-    start_sample = int(total_samples * start_percent / 100)
-    end_sample = int(total_samples * end_percent / 100)
+    total_duration = total_samples / sr
+
+    start_sample = int(start_seconds * sr)
+    end_sample = int(end_seconds * sr) if end_seconds is not None else total_samples
+
+    # Clamp to valid range
+    start_sample = max(0, min(start_sample, total_samples))
+    end_sample = max(start_sample, min(end_sample, total_samples))
 
     segment = y[start_sample:end_sample]
+    segment_duration = len(segment) / sr
 
-    logger.info(f"Loaded segment {start_percent}%-{end_percent}%: duration={duration:.2f}s, sr={sr}, samples={len(segment)}")
+    logger.info(f"Loaded segment {start_seconds:.1f}s-{end_seconds if end_seconds else total_duration:.1f}s: total_duration={total_duration:.2f}s, sr={sr}, segment_samples={len(segment)} ({segment_duration:.2f}s)")
 
     return segment, sr, total_samples
 
@@ -53,10 +59,10 @@ def find_best_loop_point(
     """Find the best loop point using cross-correlation.
 
     Args:
-        first_segment: Audio data from the first 25%
-        last_segment: Audio data from the last 25%
+        first_segment: Audio data from the search window (e.g., first 30s)
+        last_segment: Audio data from the search window (e.g., last 30s)
         sr: Sample rate
-        crossfade_duration: Duration of crossfade in seconds (used to determine comparison window)
+        crossfade_duration: Duration of crossfade in seconds (determines comparison window size)
 
     Returns:
         Tuple of (offset_samples, offset_microseconds, correlation_score)
@@ -64,16 +70,19 @@ def find_best_loop_point(
     # Use cross-correlation to find where first_segment best matches within last_segment
     # We'll compare the beginning of first_segment with sliding windows in last_segment
 
-    # Use 3x crossfade duration as comparison window (gives good context while staying relevant to actual overlap)
-    # This adapts to the user's chosen crossfade length
-    window_duration = min(
-        crossfade_duration * 3,
-        len(first_segment) / sr,
-        len(last_segment) / sr
+    # Use 2x crossfade duration as comparison window (gives context while allowing short matches)
+    # Minimum 1 second to ensure meaningful correlation
+    window_duration = max(
+        1.0,  # Minimum 1 second
+        min(
+            crossfade_duration * 2,  # 2x crossfade for context
+            len(first_segment) / sr,
+            len(last_segment) / sr
+        )
     )
     window_samples = int(window_duration * sr)
 
-    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples) [3x crossfade of {crossfade_duration}s]")
+    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples) [2x crossfade of {crossfade_duration}s, min 1s]")
 
     search_segment = first_segment[:window_samples]
 
@@ -208,10 +217,18 @@ def extend_audio_loop(
         original_duration = get_audio_duration(input_path)
         logger.info(f"Original audio duration: {original_duration:.2f}s")
 
-        # Load first 25% and last 25%
-        logger.info("Loading audio segments for analysis...")
-        first_segment, sr, total_samples = load_audio_segment(input_path, 0, 25)
-        last_segment, _, _ = load_audio_segment(input_path, 75, 100)
+        # Define search window size (30 seconds at front and back)
+        search_window_seconds = 30.0
+
+        # Adjust if file is too short
+        if original_duration < search_window_seconds * 2:
+            search_window_seconds = original_duration / 3  # Use 1/3 at each end if too short
+            logger.info(f"File shorter than 60s, adjusting search window to {search_window_seconds:.1f}s")
+
+        # Load first 30s and last 30s (or proportional if file is short)
+        logger.info(f"Loading {search_window_seconds:.1f}s search windows from front and back...")
+        first_segment, sr, total_samples = load_audio_segment(input_path, 0, search_window_seconds)
+        last_segment, _, _ = load_audio_segment(input_path, original_duration - search_window_seconds, original_duration)
 
         # Find the best loop point
         logger.info("Analyzing cross-correlation...")
