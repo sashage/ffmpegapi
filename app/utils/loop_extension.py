@@ -48,7 +48,7 @@ def load_audio_segment(
 
 
 def find_best_loop_point(
-    first_segment: np.ndarray, last_segment: np.ndarray, sr: int
+    first_segment: np.ndarray, last_segment: np.ndarray, sr: int, crossfade_duration: float = 2.0
 ) -> Tuple[int, int, float]:
     """Find the best loop point using cross-correlation.
 
@@ -56,6 +56,7 @@ def find_best_loop_point(
         first_segment: Audio data from the first 25%
         last_segment: Audio data from the last 25%
         sr: Sample rate
+        crossfade_duration: Duration of crossfade in seconds (used to determine comparison window)
 
     Returns:
         Tuple of (offset_samples, offset_microseconds, correlation_score)
@@ -63,11 +64,16 @@ def find_best_loop_point(
     # Use cross-correlation to find where first_segment best matches within last_segment
     # We'll compare the beginning of first_segment with sliding windows in last_segment
 
-    # Use a reasonable window size (e.g., 5 seconds or length of shorter segment)
-    window_duration = min(5.0, len(first_segment) / sr, len(last_segment) / sr)
+    # Use 3x crossfade duration as comparison window (gives good context while staying relevant to actual overlap)
+    # This adapts to the user's chosen crossfade length
+    window_duration = min(
+        crossfade_duration * 3,
+        len(first_segment) / sr,
+        len(last_segment) / sr
+    )
     window_samples = int(window_duration * sr)
 
-    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples)")
+    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples) [3x crossfade of {crossfade_duration}s]")
 
     search_segment = first_segment[:window_samples]
 
@@ -210,7 +216,7 @@ def extend_audio_loop(
         # Find the best loop point
         logger.info("Analyzing cross-correlation...")
         offset_samples, offset_microseconds, correlation_score = find_best_loop_point(
-            first_segment, last_segment, sr
+            first_segment, last_segment, sr, crossfade_duration
         )
 
         # Check if correlation score is below threshold
