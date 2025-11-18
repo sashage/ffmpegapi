@@ -20,9 +20,8 @@ from app.config import settings
 def create_temp_folder(parent_dir: str) -> str:
     """Create a temporary folder inside the parent directory and return its absolute path."""
     temp_folder_name = str(uuid.uuid4())
-    # Convert to absolute path immediately
-    absolute_parent_dir = os.path.abspath(parent_dir)
-    temp_folder_path = f"{absolute_parent_dir}/{temp_folder_name}"
+    # parent_dir is already absolute from config
+    temp_folder_path = os.path.join(parent_dir, temp_folder_name)
     subprocess.run(["mkdir", "-p", temp_folder_path])
     return temp_folder_path
 

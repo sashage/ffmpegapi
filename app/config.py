@@ -13,11 +13,16 @@ __version__ = "0.1.0"
 
 from pydantic_settings import BaseSettings
 from typing import Literal
+import os
+
+
+# Get the application root directory (parent of app/)
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Settings(BaseSettings):
-    upload_dir: str = "uploads"
-    output_dir: str = "outputs"
+    upload_dir: str = os.path.join(APP_ROOT, "uploads")
+    output_dir: str = os.path.join(APP_ROOT, "outputs")
 
     input_tag_placeholder: str = "<input>"
     max_input_files: int = 5
