@@ -70,19 +70,19 @@ def find_best_loop_point(
     # Use cross-correlation to find where first_segment best matches within last_segment
     # We'll compare the beginning of first_segment with sliding windows in last_segment
 
-    # Use 2x crossfade duration as comparison window (gives context while allowing short matches)
-    # Minimum 1 second to ensure meaningful correlation
-    window_duration = max(
-        1.0,  # Minimum 1 second
-        min(
-            crossfade_duration * 2,  # 2x crossfade for context
-            len(first_segment) / sr,
-            len(last_segment) / sr
-        )
+    # Use crossfade duration as comparison window, clamped between 1-2 seconds
+    # This allows short loop detection while keeping comparison focused
+    window_duration = max(1.0, min(2.0, crossfade_duration))
+
+    # Further constrain by available segment length
+    window_duration = min(
+        window_duration,
+        len(first_segment) / sr,
+        len(last_segment) / sr
     )
     window_samples = int(window_duration * sr)
 
-    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples) [2x crossfade of {crossfade_duration}s, min 1s]")
+    logger.info(f"Cross-correlation window: {window_duration:.2f}s ({window_samples} samples) [crossfade={crossfade_duration}s, clamped 1-2s]")
 
     search_segment = first_segment[:window_samples]
 
