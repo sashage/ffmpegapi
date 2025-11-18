@@ -107,6 +107,43 @@ print(f"Status: {'Success' if result['returncode'] == 0 else 'Failed'}")
 }
 ```
 
+### Example 4: Extend Audio Loop (New!)
+
+Automatically analyze and extend looping audio files:
+
+```python
+import requests
+
+# Upload audio file and get extended version
+with open("music_loop.mp3", "rb") as f:
+    response = requests.post(
+        "http://localhost:8000/extendloop",
+        files={"input_file": f}
+    )
+
+# Save the result (extended or original if not loopable)
+with open("output.mp3", "wb") as f:
+    f.write(response.content)
+
+# Check headers for metadata
+print(f"Extended: {response.headers['X-Extended']}")
+print(f"Correlation: {response.headers['X-Correlation-Score']}")
+print(f"Original: {response.headers['X-Original-Duration']}s")
+print(f"New: {response.headers['X-New-Duration']}s")
+```
+
+**How it works:**
+1. Analyzes first/last 25% of audio using cross-correlation
+2. If correlation ≥ threshold: extends with smooth crossfade
+3. If correlation < threshold: returns original unchanged
+
+**Best for:** Instrumental music, game loops, ambient soundscapes
+
+**Parameters:**
+- `input_file` (required): Audio file (MP3, WAV, etc.)
+- `crossfade` (optional, default: 2.0): Crossfade duration in seconds
+- `threshold` (optional, default: 0.5): Min correlation score (0-1)
+
 
 ## Installation & Setup
 

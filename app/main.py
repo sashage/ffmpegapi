@@ -26,7 +26,11 @@ from app.utils import (
     ensure_directories_exist,
     preprocess_cmd,
     get_output_path_from_cmd,
+    create_temp_folder,
+    save_uploaded_file,
+    input_file_size_within_limit,
 )
+from app.utils.loop_extension import extend_audio_loop
 from app.task import periodic_cleanup
 import asyncio
 from app.config import settings
@@ -124,3 +128,64 @@ async def ffmpeg_run(
         returncode=result.returncode,
         output_url=str(output_url),
     )
+
+
+@app.post("/extendloop", response_model=None)
+async def extend_loop_endpoint(
+    input_file: UploadFile = File(...),
+    crossfade: float = Form(2.0),
+    threshold: float = Form(0.5),
+) -> FileResponse:
+    """Analyzes audio and creates an extended seamless loop if suitable.
+
+    Returns the extended file if correlation score >= threshold, otherwise returns original.
+    """
+    # Validate file size
+    if not input_file_size_within_limit(input_file.size):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size exceeds {settings.max_upload_size_mb / (1024 * 1024):.0f}MB"
+        )
+
+    # Create temp folders
+    upload_temp_folder = create_temp_folder(settings.upload_dir)
+    output_temp_folder = create_temp_folder(settings.output_dir)
+
+    # Save uploaded file
+    input_filename = input_file.filename or "input.mp3"
+    input_path = os.path.join(upload_temp_folder, input_filename)
+    file_bytes = await input_file.read()
+    save_uploaded_file(file_bytes, input_path)
+
+    # Determine output filename
+    file_stem, file_ext = os.path.splitext(input_filename)
+    output_filename = f"{file_stem}_extended{file_ext}"
+    output_path = os.path.join(output_temp_folder, output_filename)
+
+    # Run loop extension
+    result = extend_audio_loop(
+        input_path=input_path,
+        output_path=output_path,
+        threshold=threshold,
+        crossfade_duration=crossfade,
+    )
+
+    # Check if operation failed
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=f"Failed: {result['error']}")
+
+    # Check output exists
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=500, detail="Output file not created")
+
+    # Return file directly with metadata headers
+    response = FileResponse(
+        path=output_path,
+        media_type="application/octet-stream",
+        filename=output_filename
+    )
+    response.headers["X-Extended"] = str(result["extended"]).lower()
+    response.headers["X-Correlation-Score"] = f"{result['correlation_score']:.4f}"
+    response.headers["X-Original-Duration"] = f"{result['original_duration']:.2f}"
+    response.headers["X-New-Duration"] = f"{result['new_duration']:.2f}"
+    return response
